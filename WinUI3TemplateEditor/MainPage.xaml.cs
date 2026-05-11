@@ -495,11 +495,17 @@ public sealed partial class MainPage : Page
             var destination = Path.Combine(_outputDir, ForcedOutputName(_selectedProfile));
             if (_selectedProfile.Kind.Equals("docx", StringComparison.OrdinalIgnoreCase))
             {
-                DocxTemplate.Export(_selectedProfile.SourcePath, destination, _fields, _ballFields, _signatureImagePath);
+                PdfExport.FromDocx(_selectedProfile.SourcePath, destination, _fields, _ballFields, _signatureImagePath);
+            }
+            else if (_selectedProfile.Kind.Equals("png", StringComparison.OrdinalIgnoreCase)
+                     || _selectedProfile.Kind.Equals("jpg", StringComparison.OrdinalIgnoreCase)
+                     || _selectedProfile.Kind.Equals("jpeg", StringComparison.OrdinalIgnoreCase))
+            {
+                PdfExport.FromImage(_selectedProfile.SourcePath, destination);
             }
             else
             {
-                File.Copy(_selectedProfile.SourcePath, destination, true);
+                throw new NotSupportedException("Solo se puede exportar DOCX o imagen como PDF.");
             }
 
             Status($"Exportado: {destination}", InfoBarSeverity.Success);
@@ -917,10 +923,9 @@ public sealed partial class MainPage : Page
     {
         if (!string.IsNullOrWhiteSpace(profile.OutputName))
         {
-            return profile.OutputName;
+            return Path.ChangeExtension(profile.OutputName, ".pdf");
         }
-        var extension = profile.Kind.Equals("png", StringComparison.OrdinalIgnoreCase) ? ".png" : ".docx";
-        return $"{profile.Label} - Juego sin valor real{extension}";
+        return $"{profile.Label} - Juego sin valor real.pdf";
     }
 
     private static string Shorten(string text, int max)
@@ -1666,6 +1671,132 @@ public static class DocxTemplate
         {
             extra.Remove();
         }
+    }
+}
+
+public static class PdfExport
+{
+    private const int PagePixelWidth = 794;
+    private const int PagePixelHeight = 1123;
+    private const double PagePointWidth = 595.28;
+    private const double PagePointHeight = 841.89;
+
+    public static void FromDocx(
+        string sourcePath,
+        string destinationPath,
+        IReadOnlyList<EditableField> fields,
+        IReadOnlyList<BallField> ballFields,
+        string? signatureImagePath)
+    {
+        var tempImage = Path.Combine(Path.GetTempPath(), $"editor_plantillas_pdf_{Guid.NewGuid():N}.png");
+        try
+        {
+            DocxPreviewRenderer.Render(sourcePath, tempImage, fields, ballFields, signatureImagePath);
+            FromImage(tempImage, destinationPath);
+        }
+        finally
+        {
+            if (File.Exists(tempImage))
+            {
+                File.Delete(tempImage);
+            }
+        }
+    }
+
+    public static void FromImage(string imagePath, string destinationPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        using var source = new System.Drawing.Bitmap(imagePath);
+        using var page = new System.Drawing.Bitmap(PagePixelWidth, PagePixelHeight, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+        using (var graphics = System.Drawing.Graphics.FromImage(page))
+        {
+            graphics.Clear(System.Drawing.Color.White);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var imageRatio = source.Width / (double)source.Height;
+            var pageRatio = PagePixelWidth / (double)PagePixelHeight;
+            var margin = Math.Abs(imageRatio - pageRatio) < 0.03 ? 0 : 36;
+            var available = new System.Drawing.Rectangle(margin, margin, PagePixelWidth - margin * 2, PagePixelHeight - margin * 2);
+            var target = FitInside(source.Width, source.Height, available);
+            graphics.DrawImage(source, target);
+        }
+
+        WriteSingleImagePdf(page, destinationPath);
+    }
+
+    private static System.Drawing.Rectangle FitInside(int sourceWidth, int sourceHeight, System.Drawing.Rectangle bounds)
+    {
+        var scale = Math.Min(bounds.Width / (double)sourceWidth, bounds.Height / (double)sourceHeight);
+        var width = Math.Max(1, (int)Math.Round(sourceWidth * scale));
+        var height = Math.Max(1, (int)Math.Round(sourceHeight * scale));
+        return new System.Drawing.Rectangle(
+            bounds.Left + (bounds.Width - width) / 2,
+            bounds.Top + (bounds.Height - height) / 2,
+            width,
+            height);
+    }
+
+    private static void WriteSingleImagePdf(System.Drawing.Bitmap page, string destinationPath)
+    {
+        using var jpegStream = new MemoryStream();
+        var encoder = ImageCodecInfo.GetImageEncoders().First(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+        using (var parameters = new EncoderParameters(1))
+        {
+            parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 94L);
+            page.Save(jpegStream, encoder, parameters);
+        }
+
+        var imageBytes = jpegStream.ToArray();
+        var content = $"q\n{PagePointWidth:0.##} 0 0 {PagePointHeight:0.##} 0 0 cm\n/Im0 Do\nQ\n";
+        var contentBytes = System.Text.Encoding.ASCII.GetBytes(content);
+
+        using var output = File.Create(destinationPath);
+        var offsets = new List<long> { 0 };
+        WriteAscii(output, "%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
+        WriteObject(output, offsets, 1, "<< /Type /Catalog /Pages 2 0 R >>");
+        WriteObject(output, offsets, 2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+        WriteObject(output, offsets, 3, $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PagePointWidth:0.##} {PagePointHeight:0.##}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>");
+        WriteImageObject(output, offsets, 4, page.Width, page.Height, imageBytes);
+        WriteStreamObject(output, offsets, 5, contentBytes);
+
+        var xrefStart = output.Position;
+        WriteAscii(output, $"xref\n0 {offsets.Count}\n");
+        WriteAscii(output, "0000000000 65535 f \n");
+        foreach (var offset in offsets.Skip(1))
+        {
+            WriteAscii(output, $"{offset:0000000000} 00000 n \n");
+        }
+        WriteAscii(output, $"trailer\n<< /Size {offsets.Count} /Root 1 0 R >>\nstartxref\n{xrefStart}\n%%EOF\n");
+    }
+
+    private static void WriteObject(Stream output, List<long> offsets, int number, string body)
+    {
+        offsets.Add(output.Position);
+        WriteAscii(output, $"{number} 0 obj\n{body}\nendobj\n");
+    }
+
+    private static void WriteImageObject(Stream output, List<long> offsets, int number, int width, int height, byte[] imageBytes)
+    {
+        offsets.Add(output.Position);
+        WriteAscii(output, $"{number} 0 obj\n<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {imageBytes.Length} >>\nstream\n");
+        output.Write(imageBytes, 0, imageBytes.Length);
+        WriteAscii(output, "\nendstream\nendobj\n");
+    }
+
+    private static void WriteStreamObject(Stream output, List<long> offsets, int number, byte[] bytes)
+    {
+        offsets.Add(output.Position);
+        WriteAscii(output, $"{number} 0 obj\n<< /Length {bytes.Length} >>\nstream\n");
+        output.Write(bytes, 0, bytes.Length);
+        WriteAscii(output, "\nendstream\nendobj\n");
+    }
+
+    private static void WriteAscii(Stream output, string value)
+    {
+        var bytes = System.Text.Encoding.ASCII.GetBytes(value);
+        output.Write(bytes, 0, bytes.Length);
     }
 }
 
