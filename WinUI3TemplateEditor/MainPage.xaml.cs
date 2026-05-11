@@ -462,7 +462,7 @@ public sealed partial class MainPage : Page
         foreach (var field in _fields)
         {
             PreviewContent.Children.Add(PreviewText(field.Label, 11, true));
-            PreviewContent.Children.Add(PreviewText(field.Value, 14, false));
+            PreviewContent.Children.Add(PreviewText(SpanishProofing.Correct(field.Value), 14, false));
         }
 
         foreach (var ballField in _ballFields)
@@ -1100,6 +1100,78 @@ public static class RadicadoLogic
     }
 }
 
+public static class SpanishProofing
+{
+    private static readonly IReadOnlyDictionary<string, string> Replacements = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["bogota"] = "bogotá",
+        ["sabado"] = "sábado",
+        ["miercoles"] = "miércoles",
+        ["cedula"] = "cédula",
+        ["valido"] = "válido",
+        ["validos"] = "válidos",
+        ["publico"] = "público",
+        ["publica"] = "pública",
+        ["basico"] = "básico",
+        ["basicos"] = "básicos",
+        ["reclamacion"] = "reclamación",
+        ["informacion"] = "información",
+        ["unica"] = "única",
+        ["unico"] = "único",
+        ["exclusivamente"] = "exclusivamente",
+        ["identificacion"] = "identificación",
+        ["ciudadania"] = "ciudadanía",
+        ["extranjeria"] = "extranjería",
+        ["numero"] = "número",
+        ["electronico"] = "electrónico",
+        ["electronica"] = "electrónica",
+        ["electronicamente"] = "electrónicamente",
+        ["depositos"] = "depósitos",
+        ["debera"] = "deberá",
+        ["sera"] = "será",
+        ["hara"] = "hará",
+        ["credito"] = "crédito",
+        ["ministerio"] = "ministerio",
+        ["sebastian"] = "sebastián",
+        ["alarcon"] = "alarcón"
+    };
+
+    public static string Correct(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        var corrected = text;
+        foreach (var replacement in Replacements)
+        {
+            corrected = Regex.Replace(
+                corrected,
+                $@"(?<![\p{{L}}]){Regex.Escape(replacement.Key)}(?![\p{{L}}])",
+                match => MatchCase(match.Value, replacement.Value),
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        return corrected;
+    }
+
+    private static string MatchCase(string source, string corrected)
+    {
+        if (source.All(character => !char.IsLetter(character) || char.IsUpper(character)))
+        {
+            return corrected.ToUpperInvariant();
+        }
+
+        if (source.Length > 0 && char.IsUpper(source[0]))
+        {
+            return char.ToUpperInvariant(corrected[0]) + corrected[1..];
+        }
+
+        return corrected;
+    }
+}
+
 public static class DocxTemplate
 {
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1118,7 +1190,7 @@ public static class DocxTemplate
             {
                 foreach (var group in HighlightGroups(paragraph))
                 {
-                    var value = string.Concat(group.SelectMany(run => run.Descendants(W + "t")).Select(text => text.Value));
+                    var value = SpanishProofing.Correct(string.Concat(group.SelectMany(run => run.Descendants(W + "t")).Select(text => text.Value)));
                     if (string.IsNullOrWhiteSpace(value))
                     {
                         continue;
@@ -1197,12 +1269,19 @@ public static class DocxTemplate
             {
                 SignatureImage.Render(input, output, signatureImagePath, sourceEntry.FullName);
             }
-            else if (IsWordXmlPart(sourceEntry))
+            else if (IsWordXmlPart(sourceEntry) || IsProofingXmlPart(sourceEntry))
             {
                 var document = XDocument.Load(input, LoadOptions.PreserveWhitespace);
-                ApplyFields(document, sourceEntry.FullName, fields);
-                ApplyRadicado(document, sourceEntry.FullName, radicado);
-                ApplyDocumentTypography(document, sourceEntry.FullName);
+                if (IsWordXmlPart(sourceEntry))
+                {
+                    ApplyFields(document, sourceEntry.FullName, fields);
+                    ApplyRadicado(document, sourceEntry.FullName, radicado);
+                }
+                ApplySpanishProofing(document, sourceEntry.FullName);
+                if (IsWordXmlPart(sourceEntry))
+                {
+                    ApplyDocumentTypography(document, sourceEntry.FullName);
+                }
                 document.Save(output, SaveOptions.DisableFormatting);
             }
             else
@@ -1243,7 +1322,7 @@ public static class DocxTemplate
             return;
         }
 
-        textElements[0].Value = value;
+        textElements[0].Value = SpanishProofing.Correct(value);
         textElements[0].SetAttributeValue(Xml + "space", "preserve");
         foreach (var extra in textElements.Skip(1))
         {
@@ -1260,6 +1339,13 @@ public static class DocxTemplate
                || name.Equals("word/footnotes.xml", StringComparison.OrdinalIgnoreCase)
                || name.Equals("word/endnotes.xml", StringComparison.OrdinalIgnoreCase)
                || name.Equals("word/comments.xml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsProofingXmlPart(ZipArchiveEntry entry)
+    {
+        var name = entry.FullName.Replace('\\', '/');
+        return name.Equals("word/settings.xml", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("word/styles.xml", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsImagePart(ZipArchiveEntry entry)
@@ -1357,6 +1443,69 @@ public static class DocxTemplate
         }
     }
 
+    private static void ApplySpanishProofing(XDocument document, string partName)
+    {
+        foreach (var proofError in document.Descendants(W + "proofErr").ToList())
+        {
+            proofError.Remove();
+        }
+
+        foreach (var text in document.Descendants(W + "t"))
+        {
+            text.Value = SpanishProofing.Correct(text.Value);
+        }
+
+        foreach (var run in document.Descendants(W + "r"))
+        {
+            SetRunLanguage(run);
+        }
+
+        var normalizedPart = partName.Replace('\\', '/');
+        if (normalizedPart.Equals("word/settings.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySpanishSettings(document);
+        }
+        else if (normalizedPart.Equals("word/styles.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySpanishStyleDefaults(document);
+        }
+    }
+
+    private static void ApplySpanishSettings(XDocument document)
+    {
+        var root = document.Root;
+        if (root is null)
+        {
+            return;
+        }
+
+        root.Element(W + "proofState")?.Remove();
+        var themeFontLang = root.Element(W + "themeFontLang");
+        if (themeFontLang is null)
+        {
+            themeFontLang = new XElement(W + "themeFontLang");
+            root.Add(themeFontLang);
+        }
+
+        themeFontLang.SetAttributeValue(W + "val", "es-CO");
+        themeFontLang.SetAttributeValue(W + "eastAsia", "es-CO");
+        themeFontLang.SetAttributeValue(W + "bidi", "es-CO");
+    }
+
+    private static void ApplySpanishStyleDefaults(XDocument document)
+    {
+        var root = document.Root;
+        if (root is null)
+        {
+            return;
+        }
+
+        var docDefaults = GetOrAdd(root, "docDefaults");
+        var runDefault = GetOrAdd(docDefaults, "rPrDefault");
+        var runProperties = GetOrAdd(runDefault, "rPr");
+        SetLanguage(runProperties);
+    }
+
     private static void SetRunTypography(XElement run, string family, int sizePoints, bool forceBold = false)
     {
         var runProperties = run.Element(W + "rPr");
@@ -1383,6 +1532,8 @@ public static class DocxTemplate
         {
             runProperties.Add(new XElement(W + "b"));
         }
+
+        SetLanguage(runProperties);
     }
 
     private static void SetRunPropertyValue(XElement runProperties, string localName, string value)
@@ -1394,6 +1545,44 @@ public static class DocxTemplate
             runProperties.Add(element);
         }
         element.SetAttributeValue(W + "val", value);
+    }
+
+    private static void SetRunLanguage(XElement run)
+    {
+        var runProperties = run.Element(W + "rPr");
+        if (runProperties is null)
+        {
+            runProperties = new XElement(W + "rPr");
+            run.AddFirst(runProperties);
+        }
+
+        SetLanguage(runProperties);
+    }
+
+    private static void SetLanguage(XElement runProperties)
+    {
+        var language = runProperties.Element(W + "lang");
+        if (language is null)
+        {
+            language = new XElement(W + "lang");
+            runProperties.Add(language);
+        }
+
+        language.SetAttributeValue(W + "val", "es-CO");
+        language.SetAttributeValue(W + "eastAsia", "es-CO");
+        language.SetAttributeValue(W + "bidi", "es-CO");
+    }
+
+    private static XElement GetOrAdd(XElement parent, string localName)
+    {
+        var child = parent.Element(W + localName);
+        if (child is null)
+        {
+            child = new XElement(W + localName);
+            parent.Add(child);
+        }
+
+        return child;
     }
 
     public static string ParagraphText(XElement paragraph, string partName, IReadOnlyList<EditableField> fields, ref int localIndex)
@@ -1467,11 +1656,11 @@ public static class DocxTemplate
         var textElements = run.Descendants(W + "t").ToList();
         if (textElements.Count == 0)
         {
-            run.Add(new XElement(W + "t", value));
+            run.Add(new XElement(W + "t", SpanishProofing.Correct(value)));
             return;
         }
 
-        textElements[0].Value = value;
+        textElements[0].Value = SpanishProofing.Correct(value);
         textElements[0].SetAttributeValue(Xml + "space", "preserve");
         foreach (var extra in textElements.Skip(1))
         {
@@ -2305,7 +2494,7 @@ public static class DocxPreviewRenderer
                         break;
                     }
                 }
-                var value = field?.Value ?? string.Concat(groups[groupIndex].Select(RunText));
+                var value = SpanishProofing.Correct(field?.Value ?? string.Concat(groups[groupIndex].Select(RunText)));
                 if (!string.IsNullOrEmpty(value))
                 {
                     segments.Add(new PreviewTextRun(value, ReadRunFormat(groups[groupIndex][0], paragraph)));
@@ -2314,7 +2503,7 @@ public static class DocxPreviewRenderer
             }
             else
             {
-                var value = RunText(run);
+                var value = SpanishProofing.Correct(RunText(run));
                 if (!string.IsNullOrEmpty(value))
                 {
                     segments.Add(new PreviewTextRun(value, ReadRunFormat(run, paragraph)));
@@ -2335,7 +2524,7 @@ public static class DocxPreviewRenderer
     private static List<PreviewTextRun> ReplacePreviewParagraphText(IReadOnlyList<PreviewTextRun> segments, string value)
     {
         var format = segments.FirstOrDefault()?.Format ?? new PreviewRunFormat("Arial", 8, true, false, false);
-        return new List<PreviewTextRun> { new(value, format) };
+        return new List<PreviewTextRun> { new(SpanishProofing.Correct(value), format) };
     }
 
     private static List<PreviewTextRun> ApplyPreviewTypography(IReadOnlyList<PreviewTextRun> segments, string partName, string paragraphText)
