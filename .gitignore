@@ -1,0 +1,9 @@
+.venv/
+.dotnet/
+build/
+dist/
+installer/payload/*.zip
+InstallerBuilder/bin/
+InstallerBuilder/obj/
+__pycache__/
+*.spec

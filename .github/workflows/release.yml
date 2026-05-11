@@ -1,0 +1,48 @@
+name: Build release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $env:APP_VERSION = $tag.TrimStart([char[]]@("v", "V"))
+          .\build_installer.ps1
+
+      - name: Create update manifest
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart([char[]]@("v", "V"))
+          $repo = "${{ github.repository }}"
+          $manifest = [ordered]@{
+            version = $version
+            download_url = "https://github.com/$repo/releases/latest/download/EditorDePlantillasSetup.exe"
+            release_url = "https://github.com/$repo/releases/latest"
+            file_name = "EditorDePlantillasSetup.exe"
+            notes = "Nueva version $version disponible."
+          }
+          $manifest | ConvertTo-Json | Set-Content -Path "dist\update.json" -Encoding UTF8
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/EditorDePlantillasSetup.exe
+            dist/WinUI3TemplateEditor.zip
+            dist/update.json

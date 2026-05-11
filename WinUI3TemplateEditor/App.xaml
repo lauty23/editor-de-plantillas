@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="WinUI3TemplateEditor.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinUI3TemplateEditor">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+            <SolidColorBrush x:Key="AppSidebarBrush" Color="#2A172D" />
+            <SolidColorBrush x:Key="AppSidebarBorderBrush" Color="#3B2640" />
+            <SolidColorBrush x:Key="AppViewportBrush" Color="#151515" />
+            <SolidColorBrush x:Key="AppViewportHeaderBrush" Color="#191919" />
+            <SolidColorBrush x:Key="AppPanelBrush" Color="#222222" />
+            <SolidColorBrush x:Key="AppPanelHoverBrush" Color="#2D2D2D" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
