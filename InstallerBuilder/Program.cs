@@ -8,6 +8,8 @@ const string LegacyProcessName = "WinUI3TemplateEditor";
 const string AppProcessName = "EditorDePlantillas";
 const string BadCopiedProcessName = "Editor de Plantillas";
 const string PayloadExeName = "EditorDePlantillas.exe";
+const string RelaunchedArg = "--installer-relaunched";
+const string WaitForPidPrefix = "--wait-for-pid=";
 
 try
 {
@@ -15,6 +17,8 @@ try
         arg.Equals("--silent", StringComparison.OrdinalIgnoreCase)
         || arg.Equals("/silent", StringComparison.OrdinalIgnoreCase)
         || arg.Equals("-silent", StringComparison.OrdinalIgnoreCase));
+    var relaunched = args.Any(arg => arg.Equals(RelaunchedArg, StringComparison.OrdinalIgnoreCase));
+    var waitForPid = ReadWaitForPid(args);
     var installDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "WinUI3TemplateEditor");
@@ -23,6 +27,18 @@ try
     if (!resolvedTarget.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase))
     {
         throw new InvalidOperationException($"Ruta de instalacion no valida: {resolvedTarget}");
+    }
+
+    var currentInstallerPath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? "";
+    if (!relaunched && IsInsideDirectory(currentInstallerPath, resolvedTarget))
+    {
+        RelaunchInstallerFromTemp(currentInstallerPath, args);
+        return;
+    }
+
+    if (waitForPid is not null)
+    {
+        WaitForProcessExit(waitForPid.Value);
     }
 
     foreach (var processName in new[] { LegacyProcessName, AppProcessName, BadCopiedProcessName })
@@ -121,6 +137,76 @@ static void CreateShortcut(string shortcutPath, string targetPath, string workin
     shortcut.WorkingDirectory = workingDirectory;
     shortcut.IconLocation = $"{targetPath},0";
     shortcut.Save();
+}
+
+static bool IsInsideDirectory(string filePath, string directoryPath)
+{
+    if (string.IsNullOrWhiteSpace(filePath))
+    {
+        return false;
+    }
+
+    var resolvedFile = Path.GetFullPath(filePath);
+    var resolvedDirectory = Path.GetFullPath(directoryPath)
+        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+        + Path.DirectorySeparatorChar;
+    return resolvedFile.StartsWith(resolvedDirectory, StringComparison.OrdinalIgnoreCase);
+}
+
+static void RelaunchInstallerFromTemp(string currentInstallerPath, string[] originalArgs)
+{
+    var tempDir = Path.Combine(Path.GetTempPath(), "EditorDePlantillasInstaller");
+    Directory.CreateDirectory(tempDir);
+    var tempInstallerPath = Path.Combine(tempDir, $"EditorDePlantillasSetup_{Guid.NewGuid():N}.exe");
+    File.Copy(currentInstallerPath, tempInstallerPath, overwrite: true);
+
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = tempInstallerPath,
+        UseShellExecute = false
+    };
+
+    foreach (var arg in originalArgs.Where(arg =>
+                 !arg.Equals(RelaunchedArg, StringComparison.OrdinalIgnoreCase)
+                 && !arg.StartsWith(WaitForPidPrefix, StringComparison.OrdinalIgnoreCase)))
+    {
+        startInfo.ArgumentList.Add(arg);
+    }
+    startInfo.ArgumentList.Add(RelaunchedArg);
+    startInfo.ArgumentList.Add($"{WaitForPidPrefix}{Environment.ProcessId}");
+
+    Process.Start(startInfo);
+}
+
+static int? ReadWaitForPid(string[] arguments)
+{
+    foreach (var argument in arguments)
+    {
+        if (!argument.StartsWith(WaitForPidPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            continue;
+        }
+
+        if (int.TryParse(argument[WaitForPidPrefix.Length..], out var processId))
+        {
+            return processId;
+        }
+    }
+
+    return null;
+}
+
+static void WaitForProcessExit(int processId)
+{
+    try
+    {
+        using var process = Process.GetProcessById(processId);
+        process.WaitForExit(10000);
+    }
+    catch
+    {
+        // The parent already exited. Continue with installation.
+    }
 }
 
 [DllImport("user32.dll", CharSet = CharSet.Unicode)]
