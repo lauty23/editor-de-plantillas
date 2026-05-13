@@ -9,46 +9,6 @@
       "source_path": "C:\\Users\\lauta\\Downloads\\docs\\docs\\GUIAS DE CAMBIOS\\DOCUMENTO 1.docx",
       "output_name": "DOCUMENTO 1 - EDITADO.pdf",
       "operations": []
-    },
-    {
-      "id": "doc2",
-      "label": "DOCUMENTO 2",
-      "kind": "docx",
-      "source_path": "C:\\Users\\lauta\\Downloads\\docs\\docs\\GUIAS DE CAMBIOS\\DOCUMENTO 2.docx",
-      "output_name": "DOCUMENTO 2 - EDITADO.pdf",
-      "operations": []
-    },
-    {
-      "id": "doc3",
-      "label": "DOCUMENTO 3",
-      "kind": "docx",
-      "source_path": "C:\\Users\\lauta\\Downloads\\docs\\docs\\GUIAS DE CAMBIOS\\DOCUMENTO 3.docx",
-      "output_name": "DOCUMENTO 3 - EDITADO.pdf",
-      "operations": []
-    },
-    {
-      "id": "doc4",
-      "label": "DOCUMENTO 4",
-      "kind": "docx",
-      "source_path": "C:\\Users\\lauta\\Downloads\\docs\\docs\\GUIAS DE CAMBIOS\\DOCUMENTO 4.docx",
-      "output_name": "DOCUMENTO 4 - EDITADO.pdf",
-      "operations": []
-    },
-    {
-      "id": "doc5",
-      "label": "DOCUMENTO 5",
-      "kind": "png",
-      "source_path": "C:\\Users\\lauta\\Downloads\\docs\\docs\\GUIAS DE CAMBIOS\\DOCUMENTO  5.png",
-      "output_name": "DOCUMENTO 5 - EDITADO.pdf",
-      "operations": []
-    },
-    {
-      "id": "doc6",
-      "label": "DOCUMENTO 6",
-      "kind": "png",
-      "source_path": "C:\\Users\\lauta\\Downloads\\docs\\docs\\GUIAS DE CAMBIOS\\DOCUMENTO 6.png",
-      "output_name": "DOCUMENTO 6 - EDITADO.pdf",
-      "operations": []
     }
   ]
 }
