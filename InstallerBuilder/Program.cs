@@ -4,11 +4,17 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 const string AppName = "Editor de Plantillas";
-const string ProcessName = "WinUI3TemplateEditor";
-const string ExeName = "WinUI3TemplateEditor.exe";
+const string InternalProcessName = "WinUI3TemplateEditor";
+const string AppProcessName = "Editor de Plantillas";
+const string PayloadExeName = "WinUI3TemplateEditor.exe";
+const string LaunchExeName = "Editor de Plantillas.exe";
 
 try
 {
+    var silent = args.Any(arg =>
+        arg.Equals("--silent", StringComparison.OrdinalIgnoreCase)
+        || arg.Equals("/silent", StringComparison.OrdinalIgnoreCase)
+        || arg.Equals("-silent", StringComparison.OrdinalIgnoreCase));
     var installDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "WinUI3TemplateEditor");
@@ -19,16 +25,19 @@ try
         throw new InvalidOperationException($"Ruta de instalacion no valida: {resolvedTarget}");
     }
 
-    foreach (var process in Process.GetProcessesByName(ProcessName))
+    foreach (var processName in new[] { InternalProcessName, AppProcessName })
     {
-        try
+        foreach (var process in Process.GetProcessesByName(processName))
         {
-            process.Kill();
-            process.WaitForExit(3000);
-        }
-        catch
-        {
-            // Best effort: continuing lets the installer report any locked file cleanly.
+            try
+            {
+                process.Kill();
+                process.WaitForExit(3000);
+            }
+            catch
+            {
+                // Best effort: continuing lets the installer report any locked file cleanly.
+            }
         }
     }
 
@@ -52,27 +61,43 @@ try
         }
     }
 
-    var exePath = Path.Combine(installDir, ExeName);
-    CreateShortcut(
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), $"{AppName}.lnk"),
-        exePath,
-        installDir);
-    CreateShortcut(
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", $"{AppName}.lnk"),
-        exePath,
-        installDir);
-
-    Process.Start(new ProcessStartInfo
+    var payloadExePath = Path.Combine(installDir, PayloadExeName);
+    var launchExePath = Path.Combine(installDir, LaunchExeName);
+    if (!File.Exists(payloadExePath))
     {
-        FileName = exePath,
-        WorkingDirectory = installDir,
-        UseShellExecute = true
-    });
+        throw new FileNotFoundException("No se encontro el ejecutable instalado.", payloadExePath);
+    }
 
-    MessageBox(IntPtr.Zero, "Editor de Plantillas instalado correctamente.", AppName, 0x40);
+    File.Copy(payloadExePath, launchExePath, overwrite: true);
+    if (!File.Exists(launchExePath))
+    {
+        throw new FileNotFoundException("No se pudo crear el ejecutable visible de la aplicacion.", launchExePath);
+    }
+
+    var desktopShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), $"{AppName}.lnk");
+    var startShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", $"{AppName}.lnk");
+    CreateShortcut(desktopShortcut, launchExePath, installDir);
+    CreateShortcut(startShortcut, launchExePath, installDir);
+
+    if (!silent)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = launchExePath,
+            WorkingDirectory = installDir,
+            UseShellExecute = true
+        });
+
+        MessageBox(
+            IntPtr.Zero,
+            $"Editor de Plantillas instalado correctamente.\n\nEjecutable:\n{launchExePath}\n\nAcceso directo:\n{desktopShortcut}",
+            AppName,
+            0x40);
+    }
 }
 catch (Exception ex)
 {
+    Environment.ExitCode = 1;
     MessageBox(IntPtr.Zero, $"No se pudo instalar la aplicacion:\n\n{ex.Message}", AppName, 0x10);
 }
 
