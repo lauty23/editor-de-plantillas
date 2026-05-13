@@ -921,11 +921,20 @@ public sealed partial class MainPage : Page
 
     private static string ForcedOutputName(TemplateProfile profile)
     {
-        if (!string.IsNullOrWhiteSpace(profile.OutputName))
+        var documentName = string.IsNullOrWhiteSpace(profile.Label)
+            ? Path.GetFileNameWithoutExtension(profile.SourcePath)
+            : profile.Label.Trim();
+        return $"{SanitizeFileName(documentName)} - EDITADO.pdf";
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        foreach (var invalid in Path.GetInvalidFileNameChars())
         {
-            return Path.ChangeExtension(profile.OutputName, ".pdf");
+            fileName = fileName.Replace(invalid, '_');
         }
-        return $"{profile.Label} - Juego sin valor real.pdf";
+
+        return string.IsNullOrWhiteSpace(fileName) ? "DOCUMENTO" : fileName;
     }
 
     private static string Shorten(string text, int max)
