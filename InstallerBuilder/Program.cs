@@ -4,10 +4,10 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 const string AppName = "Editor de Plantillas";
-const string InternalProcessName = "WinUI3TemplateEditor";
-const string AppProcessName = "Editor de Plantillas";
-const string PayloadExeName = "WinUI3TemplateEditor.exe";
-const string LaunchExeName = "Editor de Plantillas.exe";
+const string LegacyProcessName = "WinUI3TemplateEditor";
+const string AppProcessName = "EditorDePlantillas";
+const string BadCopiedProcessName = "Editor de Plantillas";
+const string PayloadExeName = "EditorDePlantillas.exe";
 
 try
 {
@@ -25,7 +25,7 @@ try
         throw new InvalidOperationException($"Ruta de instalacion no valida: {resolvedTarget}");
     }
 
-    foreach (var processName in new[] { InternalProcessName, AppProcessName })
+    foreach (var processName in new[] { LegacyProcessName, AppProcessName, BadCopiedProcessName })
     {
         foreach (var process in Process.GetProcessesByName(processName))
         {
@@ -62,35 +62,28 @@ try
     }
 
     var payloadExePath = Path.Combine(installDir, PayloadExeName);
-    var launchExePath = Path.Combine(installDir, LaunchExeName);
     if (!File.Exists(payloadExePath))
     {
         throw new FileNotFoundException("No se encontro el ejecutable instalado.", payloadExePath);
     }
 
-    File.Copy(payloadExePath, launchExePath, overwrite: true);
-    if (!File.Exists(launchExePath))
-    {
-        throw new FileNotFoundException("No se pudo crear el ejecutable visible de la aplicacion.", launchExePath);
-    }
-
     var desktopShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), $"{AppName}.lnk");
     var startShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", $"{AppName}.lnk");
-    CreateShortcut(desktopShortcut, launchExePath, installDir);
-    CreateShortcut(startShortcut, launchExePath, installDir);
+    CreateShortcut(desktopShortcut, payloadExePath, installDir);
+    CreateShortcut(startShortcut, payloadExePath, installDir);
 
     if (!silent)
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = launchExePath,
+            FileName = payloadExePath,
             WorkingDirectory = installDir,
             UseShellExecute = true
         });
 
         MessageBox(
             IntPtr.Zero,
-            $"Editor de Plantillas instalado correctamente.\n\nEjecutable:\n{launchExePath}\n\nAcceso directo:\n{desktopShortcut}",
+            $"Editor de Plantillas instalado correctamente.\n\nEjecutable:\n{payloadExePath}\n\nAcceso directo:\n{desktopShortcut}",
             AppName,
             0x40);
     }

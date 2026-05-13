@@ -31,4 +31,4 @@ if (-not [string]::IsNullOrWhiteSpace($env:APP_VERSION)) {
 
 Write-Host ""
 Write-Host "Listo:"
-Write-Host (Join-Path $output "WinUI3TemplateEditor.exe")
+Write-Host (Join-Path $output "EditorDePlantillas.exe")
