@@ -671,8 +671,7 @@ public sealed partial class MainPage : Page
 
         var updatesDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "WinUI3TemplateEditor",
-            "Updates");
+            "EditorDePlantillasUpdates");
         Directory.CreateDirectory(updatesDir);
 
         var destination = Path.Combine(updatesDir, fileName);
