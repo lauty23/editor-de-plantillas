@@ -9,6 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>WinUI3TemplateEditorInstaller</AssemblyName>
+    <ApplicationIcon>..\WinUI3TemplateEditor\Assets\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

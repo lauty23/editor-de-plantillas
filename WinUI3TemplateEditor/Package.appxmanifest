@@ -16,8 +16,8 @@
   <mp:PhoneIdentity PhoneProductId="C31D2BB7-FDDC-48A1-A34C-DA27987E8C62" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>WinUI3TemplateEditor</DisplayName>
-    <PublisherDisplayName>TemplateEditor</PublisherDisplayName>
+    <DisplayName>Editor de Plantillas</DisplayName>
+    <PublisherDisplayName>Editor de Plantillas</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -35,8 +35,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="WinUI3TemplateEditor"
-        Description="WinUI3TemplateEditor"
+        DisplayName="Editor de Plantillas"
+        Description="Editor de Plantillas"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
